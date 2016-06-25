@@ -1,4 +1,4 @@
-package dhwdb
+package sqlutil
 
 import "database/sql"
 

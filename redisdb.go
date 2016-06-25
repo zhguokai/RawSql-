@@ -1,4 +1,4 @@
-package dhwdb
+package sqlutil
 
 import (
 	"github.com/garyburd/redigo/redis"

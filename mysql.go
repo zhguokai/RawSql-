@@ -1,4 +1,16 @@
-package dhwdb
+//sqlutil 封装使用sql语句对Mysql的操作
+//基于go-sql-driver/mysql
+//使用方式
+//	package main
+//
+//	func func main() {
+//		sqlutil.RegisterDB(driver, url string, maxIdle int, maxOpen int)
+//	}
+//
+//
+//
+
+package sqlutil
 
 import (
 	_ "github.com/go-sql-driver/mysql"
@@ -7,20 +19,19 @@ import (
 	"log"
 )
 
-var MySqlClient *dbClient
+//数据库句柄
+var conn *sql.DB
 
-//func:RegisterDB
-//param:driver 只支持mysql
-//param:url 连接数据库的地址
-func RegisterDB(driver, url string) (err error) {
+// RegisterDB 注册数据库驱动
+func RegisterDB(driver, url string, maxIdle int, maxOpen int) (err error) {
 	if db, err := sql.Open(driver, url); err == nil {
-		db.SetMaxIdleConns(200)
-		db.SetMaxOpenConns(400)
+		db.SetMaxIdleConns(maxIdle)
+		db.SetMaxOpenConns(maxOpen)
 		err := db.Ping()
 		if err != nil {
 			return err
 		}
-		MySqlClient = &dbClient{connDB: db}
+		conn = db
 		return nil
 	} else {
 		return err
@@ -28,14 +39,14 @@ func RegisterDB(driver, url string) (err error) {
 }
 
 //通过SQL语句查询单条记录，无参数,多条记录时返回首条记录
-func (p *dbClient) QuerySingleMapBySQL(sqlStr string) (row RowMap, err error) {
+func QuerySingleMapBySQL(sqlStr string) (row RowMap, err error) {
 
 	//判断SQL语句是否为空
 	if "" == sqlStr {
 		return nil, errors.New("传入的SQL语句不能为空！")
 	}
 	//调用go-sql-server\Mysql驱动查询
-	rows, err := p.connDB.Query(sqlStr)
+	rows, err := conn.Query(sqlStr)
 	if err != nil {
 		log.Println("mysql query error", err.Error())
 		return nil, err
@@ -74,7 +85,7 @@ func (p *dbClient) QuerySingleMapBySQL(sqlStr string) (row RowMap, err error) {
 }
 
 //通过SQL语句查询记录返回Map
-func (p *dbClient) QuerySingleMapBySQLWithParams(sqlStr string, params OrmParams) (singleMap RowMap, err error) {
+func QuerySingleMapBySQLWithParams(sqlStr string, params OrmParams) (singleMap RowMap, err error) {
 	//判断SQL语句是否为空
 	if "" == sqlStr {
 		return nil, errors.New("传入的SQL语句不能为空！")
@@ -84,7 +95,7 @@ func (p *dbClient) QuerySingleMapBySQLWithParams(sqlStr string, params OrmParams
 	}
 	singleMap = RowMap{}
 	//调用go-sql-server\Mysql驱动查询
-	rows, err := p.connDB.Query(sqlStr, params...)
+	rows, err := conn.Query(sqlStr, params...)
 	if err != nil {
 		log.Println("mysql query error", err.Error())
 		return nil, err
@@ -122,14 +133,14 @@ func (p *dbClient) QuerySingleMapBySQLWithParams(sqlStr string, params OrmParams
 }
 
 //通过SQL语句查询多条记录
-func (p *dbClient) QueryMultiMapBySQL(sqlStr string) (result []RowMap, err error) {
+func QueryMultiMapBySQL(sqlStr string) (result []RowMap, err error) {
 
 	//判断SQL语句是否为空
 	if "" == sqlStr {
 		return nil, errors.New("传入的SQL语句不能为空！")
 	}
 	//调用go-sql-server\Mysql驱动查询
-	rows, err := p.connDB.Query(sqlStr)
+	rows, err := conn.Query(sqlStr)
 	if err != nil {
 		log.Println("mysql query error", err.Error())
 		return nil, err
@@ -166,7 +177,7 @@ func (p *dbClient) QueryMultiMapBySQL(sqlStr string) (result []RowMap, err error
 }
 
 //通过SQL语句查询多条记录带参数
-func (p *dbClient) QueryMultiMapBySQLWithParams(sqlStr string, params OrmParams) (result []RowMap, err error) {
+func QueryMultiMapBySQLWithParams(sqlStr string, params OrmParams) (result []RowMap, err error) {
 	//判断SQL语句是否为空
 	if "" == sqlStr {
 		return nil, errors.New("传入的SQL语句不能为空！")
@@ -176,7 +187,7 @@ func (p *dbClient) QueryMultiMapBySQLWithParams(sqlStr string, params OrmParams)
 	}
 	result = []RowMap{}
 	//调用go-sql-server\Mysql驱动查询
-	rows, err := p.connDB.Query(sqlStr, params...)
+	rows, err := conn.Query(sqlStr, params...)
 	if err != nil {
 		log.Println("mysql query error", err.Error())
 		return nil, err
@@ -211,9 +222,9 @@ func (p *dbClient) QueryMultiMapBySQLWithParams(sqlStr string, params OrmParams)
 }
 
 //执行SQL语句,包含增删改查
-func (p *dbClient) executeSqlWithParams(sqlStr string, params OrmParams) (rowCount int64, err error) {
+func executeSqlWithParams(sqlStr string, params OrmParams) (rowCount int64, err error) {
 	//开启事务
-	tx, err := p.connDB.Begin()
+	tx, err := conn.Begin()
 	if err != nil {
 		log.Println("打开事务:" + err.Error())
 		return -1, err
@@ -250,24 +261,24 @@ func (p *dbClient) executeSqlWithParams(sqlStr string, params OrmParams) (rowCou
 }
 
 //执行单条带参数SQl语句，例如新增、修改、删除开启事务
-func (p *dbClient) InsertRowWithParam(sqlStr string, params OrmParams) (rowCount int64, err error) {
+func InsertRowWithParam(sqlStr string, params OrmParams) (rowCount int64, err error) {
 	//增加记录
-	return p.executeSqlWithParams(sqlStr, params)
+	return executeSqlWithParams(sqlStr, params)
 }
 
 //更新记录Row，带参数
-func (p *dbClient) UpdateRowWithParam(sqlStr string, params OrmParams) (rowCount int64, err error) {
-	return p.executeSqlWithParams(sqlStr, params)
+func UpdateRowWithParam(sqlStr string, params OrmParams) (rowCount int64, err error) {
+	return executeSqlWithParams(sqlStr, params)
 
 }
 
 //删除记录Row，带参数
-func (p *dbClient) DeleteRowWithParam(sqlStr string, params OrmParams) (rowCount int64, err error) {
-	return p.executeSqlWithParams(sqlStr, params)
+func DeleteRowWithParam(sqlStr string, params OrmParams) (rowCount int64, err error) {
+	return executeSqlWithParams(sqlStr, params)
 }
 
 //批量执行SQl语句
-func (p *dbClient) ExecBatchSqlWithParams(sqlStrs []string, params []OrmParams) (rowCount int64, err error) {
+func ExecBatchSqlWithParams(sqlStrs []string, params []OrmParams) (rowCount int64, err error) {
 	//判断SQL参数记录数与参数是否一一对应
 	if sqlStrs == nil || len(sqlStrs) == 0 {
 		return 0, errors.New("sql语句数组不能为空")
@@ -281,7 +292,7 @@ func (p *dbClient) ExecBatchSqlWithParams(sqlStrs []string, params []OrmParams) 
 	}
 
 	//开启事务支持
-	tx, err := p.connDB.Begin()
+	tx, err := conn.Begin()
 	if err != nil {
 		return 0, err
 	} else {
@@ -310,12 +321,12 @@ func (p *dbClient) ExecBatchSqlWithParams(sqlStrs []string, params []OrmParams) 
 }
 
 //批量执行SQl语句
-func (p *dbClient) BatchExecuteWithModel(models OrmObjList) (rowCount int64, err error) {
+func BatchExecuteWithModel(models OrmObjList) (rowCount int64, err error) {
 	if nil == models || len(models) == 0 {
 		return 0, errors.New("缺少要执行的SQL语句")
 	}
 	//开启事务支持
-	tx, err := p.connDB.Begin()
+	tx, err := conn.Begin()
 	if err != nil {
 		log.Println("连接数据库失败:" + err.Error())
 		return 0, err
