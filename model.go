@@ -2,30 +2,17 @@ package sqlutil
 
 import "database/sql"
 
+//数据库连接URL
+const MysqlDriverURL = "%s:%s@tcp(%s:%s)/%s?timeout=90s"
+
 //数据库客户端结构
 type dbClient struct {
 	connDB *sql.DB
 }
 
-type NestObjMap map[string]ObjMap
+//返回多条记录
+type RowMaps []RowMap
 
-func (p NestObjMap)GetMapValue(mapKey, key string, defaultValue interface{}) (interface{}){
-	if obj, ok := p[mapKey]; ok {
-		return obj.Get(key, defaultValue)
-	}
-	return defaultValue
-}
-
-//
-type ObjMap map[string]interface{}
-
-func (p ObjMap)Get(key string, defaultValue interface{}) (interface{}) {
-	if value, ok := p[key]; ok {
-		return value
-	} else {
-		return defaultValue
-	}
-}
 //查询结果
 type RowMap map[string]interface{}
 
@@ -48,6 +35,8 @@ type OrmObj struct {
 	Param OrmParams
 }
 
+//SQL语句
 type OrmSql string
+
 //批量参数模型
 type OrmParams []interface{}

@@ -39,8 +39,7 @@ func RegisterDB(driver, url string, maxIdle int, maxOpen int) (err error) {
 }
 
 //通过SQL语句查询单条记录，无参数,多条记录时返回首条记录
-func QuerySingleMapBySQL(sqlStr string) (row RowMap, err error) {
-
+func QueryRow(sqlStr string) (row RowMap, err error) {
 	//判断SQL语句是否为空
 	if "" == sqlStr {
 		return nil, errors.New("传入的SQL语句不能为空！")
@@ -84,8 +83,9 @@ func QuerySingleMapBySQL(sqlStr string) (row RowMap, err error) {
 
 }
 
-//通过SQL语句查询记录返回Map
-func QuerySingleMapBySQLWithParams(sqlStr string, params OrmParams) (singleMap RowMap, err error) {
+//根据SQL语句与参数列表查询单条记录,SQL语句中参数为?占位符
+//
+func QueryRowWithParam(sqlStr string, params OrmParams) (singleMap RowMap, err error) {
 	//判断SQL语句是否为空
 	if "" == sqlStr {
 		return nil, errors.New("传入的SQL语句不能为空！")
