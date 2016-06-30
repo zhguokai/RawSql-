@@ -17,6 +17,7 @@ import (
 	"database/sql"
 	"errors"
 	"log"
+	"strconv"
 )
 
 //数据库句柄
@@ -133,7 +134,7 @@ func QueryRowWithParam(sqlStr string, params OrmParams) (singleMap RowMap, err e
 }
 
 //通过SQL语句查询多条记录
-func QueryMultiMapBySQL(sqlStr string) (result []RowMap, err error) {
+func QueryRows(sqlStr string) (rowMaps RowMaps, err error) {
 
 	//判断SQL语句是否为空
 	if "" == sqlStr {
@@ -145,7 +146,7 @@ func QueryMultiMapBySQL(sqlStr string) (result []RowMap, err error) {
 		log.Println("mysql query error", err.Error())
 		return nil, err
 	}
-	result = []RowMap{}
+	rowMaps = RowMaps{}
 	//延时关闭Rows
 	defer rows.Close()
 	//获取记录列
@@ -168,16 +169,16 @@ func QueryMultiMapBySQL(sqlStr string) (result []RowMap, err error) {
 				each[columns[i]] = string(col)
 			}
 
-			result = append(result, each)
+			rowMaps = append(rowMaps, each)
 
 		}
-		return result, nil
+		return rowMaps, nil
 	}
 
 }
 
 //通过SQL语句查询多条记录带参数
-func QueryMultiMapBySQLWithParams(sqlStr string, params OrmParams) (result []RowMap, err error) {
+func QueryRowsWithParams(sqlStr string, params OrmParams) (rowMaps RowMaps, err error) {
 	//判断SQL语句是否为空
 	if "" == sqlStr {
 		return nil, errors.New("传入的SQL语句不能为空！")
@@ -185,7 +186,7 @@ func QueryMultiMapBySQLWithParams(sqlStr string, params OrmParams) (result []Row
 	if nil == params {
 		return nil, errors.New("传入的参数不能为空！")
 	}
-	result = []RowMap{}
+	rowMaps = RowMaps{}
 	//调用go-sql-server\Mysql驱动查询
 	rows, err := conn.Query(sqlStr, params...)
 	if err != nil {
@@ -214,10 +215,10 @@ func QueryMultiMapBySQLWithParams(sqlStr string, params OrmParams) (result []Row
 				each[columns[i]] = string(col)
 			}
 
-			result = append(result, each)
+			rowMaps = append(rowMaps, each)
 
 		}
-		return result, nil
+		return rowMaps, nil
 	}
 }
 
@@ -260,6 +261,46 @@ func executeSqlWithParams(sqlStr string, params OrmParams) (rowCount int64, err 
 	}
 }
 
+//执行SQL语句,包含增删改查
+func executeSql(sqlStr string) (rowCount int64, err error) {
+	//开启事务
+	tx, err := conn.Begin()
+	if err != nil {
+		log.Println("打开事务:" + err.Error())
+		return -1, err
+	}
+	stmt, err := tx.Prepare(sqlStr)
+	if err != nil {
+		log.Println("预编译SQL:" + sqlStr + ";" + err.Error())
+		return -1, err
+	}
+	defer stmt.Close()
+
+	res, err := stmt.Exec()
+	if err != nil {
+		tx.Rollback()
+		log.Println("执行语句出错:" + sqlStr + ";" + err.Error())
+		return -1, err
+	} else {
+
+		rowCount, err := res.RowsAffected()
+		if err == nil {
+			cerr := tx.Commit()
+			if cerr != nil {
+				log.Println("提交事务失败:" + cerr.Error())
+				return -1, cerr
+			}
+			return rowCount, nil
+		} else {
+			tx.Rollback()
+			log.Println("查询记录行数:" + err.Error())
+			return -1, nil
+		}
+
+	}
+}
+
+
 //执行单条带参数SQl语句，例如新增、修改、删除开启事务
 func InsertRowWithParam(sqlStr string, params OrmParams) (rowCount int64, err error) {
 	//增加记录
@@ -273,8 +314,12 @@ func UpdateRowWithParam(sqlStr string, params OrmParams) (rowCount int64, err er
 }
 
 //删除记录Row，带参数
-func DeleteRowWithParam(sqlStr string, params OrmParams) (rowCount int64, err error) {
+func DeleteRowsWithParam(sqlStr string, params OrmParams) (rowCount int64, err error) {
 	return executeSqlWithParams(sqlStr, params)
+}
+//删除记录Row，带参数
+func DeleteRows(sqlStr string) (rowCount int64, err error) {
+	return executeSql(sqlStr)
 }
 
 //批量执行SQl语句
@@ -361,4 +406,24 @@ func BatchExecuteWithModel(models OrmObjList) (rowCount int64, err error) {
 
 	}
 
+}
+
+func CountRow(sql string, column string, params OrmParams) (rowCount int64, err error) {
+	if params == nil || len(params) == 0 {
+		row, err := QueryRow(sql)
+		if err != nil {
+			return 0, err
+		}
+		rowCount := row.Get(column, "0").(string)
+		count, _ := strconv.Atoi(rowCount)
+		return int64(count), nil
+	} else {
+		row, err := QueryRowWithParam(sql, params)
+		if err != nil {
+			return 0, err
+		}
+		rowCount := row.Get(column, "0").(string)
+		count, _ := strconv.Atoi(rowCount)
+		return int64(count), nil
+	}
 }
