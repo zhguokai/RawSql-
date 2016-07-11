@@ -1,16 +1,17 @@
-////sqlutil 封装使用sql语句对Mysql的操作
-////基于go-sql-driver/mysql
-////使用方式
-////	package main
-////
-////	func func main() {
-////		sqlutil.RegisterDB(driver, url string, maxIdle int, maxOpen int)
-////	}
-////
-////
-////
-//
 package sqlutil
+
+//sqlutil 封装使用sql语句对Mysql的操作
+//基于go-sql-driver/mysql
+//使用方式
+//	package main
+//
+//	func func main() {
+//		sqlutil.RegisterDB(driver, url string, maxIdle int, maxOpen int)
+//	}
+//
+//
+//
+
 
 import (
 	_ "github.com/go-sql-driver/mysql"
@@ -20,11 +21,23 @@ import (
 	"strconv"
 )
 
+var dbPool map[string]*dBTool
+
 //数据库句柄
-var conn *sql.DB
+type dBTool struct {
+	conn *sql.DB
+}
+
+func UseDB(key string) *dBTool {
+	if db, ok := dbPool[key]; ok {
+		return db
+	} else {
+		return nil
+	}
+}
 
 // RegisterDB 注册数据库驱动
-func RegisterDB(driver, url string, maxIdle int, maxOpen int) (err error) {
+func AddDB(key, driver, url string, maxIdle int, maxOpen int) (err error) {
 	if db, err := sql.Open(driver, url); err == nil {
 		db.SetMaxIdleConns(maxIdle)
 		db.SetMaxOpenConns(maxOpen)
@@ -32,7 +45,7 @@ func RegisterDB(driver, url string, maxIdle int, maxOpen int) (err error) {
 		if err != nil {
 			return err
 		}
-		conn = db
+		dbPool[key] = &dBTool{"conn":db}
 		return nil
 	} else {
 		return err
@@ -40,13 +53,13 @@ func RegisterDB(driver, url string, maxIdle int, maxOpen int) (err error) {
 }
 
 //通过SQL语句查询单条记录，无参数,多条记录时返回首条记录
-func QueryRow(sqlStr string) (row RowMap, err error) {
+func (p *dBTool)QueryRow(sqlStr string) (row RowMap, err error) {
 	//判断SQL语句是否为空
 	if "" == sqlStr {
 		return nil, errors.New("传入的SQL语句不能为空！")
 	}
 	//调用go-sql-server\Mysql驱动查询
-	rows, err := conn.Query(sqlStr)
+	rows, err := p.conn.Query(sqlStr)
 	if err != nil {
 		log.Println("mysql query error", err.Error())
 		return nil, err
@@ -86,7 +99,7 @@ func QueryRow(sqlStr string) (row RowMap, err error) {
 
 //根据SQL语句与参数列表查询单条记录,SQL语句中参数为?占位符
 //
-func QueryRowWithParam(sqlStr string, params OrmParams) (singleMap RowMap, err error) {
+func (p *dBTool)QueryRowWithParam(sqlStr string, params OrmParams) (singleMap RowMap, err error) {
 	//判断SQL语句是否为空
 	if "" == sqlStr {
 		return nil, errors.New("传入的SQL语句不能为空！")
@@ -96,7 +109,7 @@ func QueryRowWithParam(sqlStr string, params OrmParams) (singleMap RowMap, err e
 	}
 	singleMap = RowMap{}
 	//调用go-sql-server\Mysql驱动查询
-	rows, err := conn.Query(sqlStr, params...)
+	rows, err := p.conn.Query(sqlStr, params...)
 	if err != nil {
 		log.Println("mysql query error", err.Error())
 		return nil, err
@@ -134,14 +147,14 @@ func QueryRowWithParam(sqlStr string, params OrmParams) (singleMap RowMap, err e
 }
 
 //通过SQL语句查询多条记录
-func QueryRows(sqlStr string) (rowMaps RowMaps, err error) {
+func (p *dBTool)QueryRows(sqlStr string) (rowMaps RowMaps, err error) {
 
 	//判断SQL语句是否为空
 	if "" == sqlStr {
 		return nil, errors.New("传入的SQL语句不能为空！")
 	}
 	//调用go-sql-server\Mysql驱动查询
-	rows, err := conn.Query(sqlStr)
+	rows, err := p.conn.Query(sqlStr)
 	if err != nil {
 		log.Println("mysql query error", err.Error())
 		return nil, err
@@ -178,7 +191,7 @@ func QueryRows(sqlStr string) (rowMaps RowMaps, err error) {
 }
 
 //通过SQL语句查询多条记录带参数
-func QueryRowsWithParams(sqlStr string, params OrmParams) (rowMaps RowMaps, err error) {
+func (p *dBTool)QueryRowsWithParams(sqlStr string, params OrmParams) (rowMaps RowMaps, err error) {
 	//判断SQL语句是否为空
 	if "" == sqlStr {
 		return nil, errors.New("传入的SQL语句不能为空！")
@@ -188,7 +201,7 @@ func QueryRowsWithParams(sqlStr string, params OrmParams) (rowMaps RowMaps, err 
 	}
 	rowMaps = RowMaps{}
 	//调用go-sql-server\Mysql驱动查询
-	rows, err := conn.Query(sqlStr, params...)
+	rows, err := p.conn.Query(sqlStr, params...)
 	if err != nil {
 		log.Println("mysql query error", err.Error())
 		return nil, err
@@ -223,9 +236,9 @@ func QueryRowsWithParams(sqlStr string, params OrmParams) (rowMaps RowMaps, err 
 }
 
 //执行SQL语句,包含增删改查
-func executeSqlWithParams(sqlStr string, params OrmParams) (rowCount int64, err error) {
+func (p *dBTool)executeSqlWithParams(sqlStr string, params OrmParams) (rowCount int64, err error) {
 	//开启事务
-	tx, err := conn.Begin()
+	tx, err := p.conn.Begin()
 	if err != nil {
 		log.Println("打开事务:" + err.Error())
 		return -1, err
@@ -262,9 +275,9 @@ func executeSqlWithParams(sqlStr string, params OrmParams) (rowCount int64, err 
 }
 
 //执行SQL语句,包含增删改查
-func executeSql(sqlStr string) (rowCount int64, err error) {
+func (p *dBTool)executeSql(sqlStr string) (rowCount int64, err error) {
 	//开启事务
-	tx, err := conn.Begin()
+	tx, err := p.conn.Begin()
 	if err != nil {
 		log.Println("打开事务:" + err.Error())
 		return -1, err
@@ -302,28 +315,28 @@ func executeSql(sqlStr string) (rowCount int64, err error) {
 
 
 //执行单条带参数SQl语句，例如新增、修改、删除开启事务
-func InsertRowWithParam(sqlStr string, params OrmParams) (rowCount int64, err error) {
+func (p *dBTool)InsertRowWithParam(sqlStr string, params OrmParams) (rowCount int64, err error) {
 	//增加记录
-	return executeSqlWithParams(sqlStr, params)
+	return p.executeSqlWithParams(sqlStr, params)
 }
 
 //更新记录Row，带参数
-func UpdateRowWithParam(sqlStr string, params OrmParams) (rowCount int64, err error) {
-	return executeSqlWithParams(sqlStr, params)
+func (p *dBTool)UpdateRowWithParam(sqlStr string, params OrmParams) (rowCount int64, err error) {
+	return p.executeSqlWithParams(sqlStr, params)
 
 }
 
 //删除记录Row，带参数
-func DeleteRowsWithParam(sqlStr string, params OrmParams) (rowCount int64, err error) {
-	return executeSqlWithParams(sqlStr, params)
+func (p *dBTool)DeleteRowsWithParam(sqlStr string, params OrmParams) (rowCount int64, err error) {
+	return p.executeSqlWithParams(sqlStr, params)
 }
 //删除记录Row，带参数
-func DeleteRows(sqlStr string) (rowCount int64, err error) {
-	return executeSql(sqlStr)
+func (p *dBTool)DeleteRows(sqlStr string) (rowCount int64, err error) {
+	return p.executeSql(sqlStr)
 }
 
 //批量执行SQl语句
-func ExecBatchSqlWithParams(sqlStrs []string, params []OrmParams) (rowCount int64, err error) {
+func (p *dBTool)ExecBatchSqlWithParams(sqlStrs []string, params []OrmParams) (rowCount int64, err error) {
 	//判断SQL参数记录数与参数是否一一对应
 	if sqlStrs == nil || len(sqlStrs) == 0 {
 		return 0, errors.New("sql语句数组不能为空")
@@ -337,7 +350,7 @@ func ExecBatchSqlWithParams(sqlStrs []string, params []OrmParams) (rowCount int6
 	}
 
 	//开启事务支持
-	tx, err := conn.Begin()
+	tx, err := p.conn.Begin()
 	if err != nil {
 		return 0, err
 	} else {
@@ -366,12 +379,12 @@ func ExecBatchSqlWithParams(sqlStrs []string, params []OrmParams) (rowCount int6
 }
 
 //批量执行SQl语句
-func BatchExecuteWithModel(models OrmObjList) (rowCount int64, err error) {
+func (p *dBTool)BatchExecuteWithModel(models OrmObjList) (rowCount int64, err error) {
 	if nil == models || len(models) == 0 {
 		return 0, errors.New("缺少要执行的SQL语句")
 	}
 	//开启事务支持
-	tx, err := conn.Begin()
+	tx, err := p.conn.Begin()
 	if err != nil {
 		log.Println("连接数据库失败:" + err.Error())
 		return 0, err
@@ -408,9 +421,9 @@ func BatchExecuteWithModel(models OrmObjList) (rowCount int64, err error) {
 
 }
 
-func CountRow(sql string, column string, params OrmParams) (rowCount int64, err error) {
+func (p *dBTool)CountRow(sql string, column string, params OrmParams) (rowCount int64, err error) {
 	if params == nil || len(params) == 0 {
-		row, err := QueryRow(sql)
+		row, err := p.QueryRow(sql)
 		if err != nil {
 			return 0, err
 		}
@@ -418,7 +431,7 @@ func CountRow(sql string, column string, params OrmParams) (rowCount int64, err 
 		count, _ := strconv.Atoi(rowCount)
 		return int64(count), nil
 	} else {
-		row, err := QueryRowWithParam(sql, params)
+		row, err := p.QueryRowWithParam(sql, params)
 		if err != nil {
 			return 0, err
 		}
