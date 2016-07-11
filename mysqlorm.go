@@ -45,7 +45,9 @@ func AddDB(key, driver, url string, maxIdle int, maxOpen int) (err error) {
 		if err != nil {
 			return err
 		}
-		dbPool[key] = &dBTool{"conn":db}
+		dbItem := &dBTool{}
+		dbItem.conn = db
+		dbPool[key] = dbItem
 		return nil
 	} else {
 		return err
