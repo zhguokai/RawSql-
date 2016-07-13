@@ -21,7 +21,7 @@ import (
 	"strconv"
 )
 
-var dbPool map[string]*dBTool
+var dbPool map[string]*dBTool = map[string]*dBTool{}
 
 //数据库句柄
 type dBTool struct {
