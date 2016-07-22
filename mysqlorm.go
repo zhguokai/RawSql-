@@ -204,14 +204,15 @@ func (p *dBTool)QueryRowsWithParams(sqlStr string, params OrmParams) (rowMaps Ro
 	rowMaps = RowMaps{}
 	//调用go-sql-server\Mysql驱动查询
 	stmt,err := p.conn.Prepare(sqlStr)
+	defer stmt.Close()
+	//查询
 	rows, err:=stmt.Query(params...)
 	if err != nil {
 		log.Println("mysql query error", err.Error())
 		return nil, err
 	}
-
-	//延时关闭Rows
 	defer rows.Close()
+
 	//获取记录列
 	if columns, err := rows.Columns(); err != nil {
 		return nil, err
