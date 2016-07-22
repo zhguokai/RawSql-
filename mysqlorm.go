@@ -19,6 +19,7 @@ import (
 	"errors"
 	"log"
 	"strconv"
+	"github.com/zhguokai/goutil"
 )
 
 var dbPool map[string]*dBTool = map[string]*dBTool{}
@@ -156,7 +157,8 @@ func (p *dBTool)QueryRows(sqlStr string) (rowMaps RowMaps, err error) {
 		return nil, errors.New("传入的SQL语句不能为空！")
 	}
 	//调用go-sql-server\Mysql驱动查询
-	rows, err := p.conn.Query(sqlStr)
+	stmt,err := p.conn.Prepare(sqlStr)
+	rows, err:=stmt.Query()
 	if err != nil {
 		log.Println("mysql query error", err.Error())
 		return nil, err
@@ -175,18 +177,16 @@ func (p *dBTool)QueryRows(sqlStr string) (rowMaps RowMaps, err error) {
 		for i := range values {
 			scans[i] = &values[i]
 		}
-
+		log.Println("row生成:", goutil.GetCurrentTime())
 		for rows.Next() {
 			_ = rows.Scan(scans...)
 			each := make(map[string]interface{})
-
 			for i, col := range values {
 				each[columns[i]] = string(col)
 			}
-
 			rowMaps = append(rowMaps, each)
-
 		}
+		log.Println("row结束:", goutil.GetCurrentTime())
 		return rowMaps, nil
 	}
 
@@ -203,11 +203,13 @@ func (p *dBTool)QueryRowsWithParams(sqlStr string, params OrmParams) (rowMaps Ro
 	}
 	rowMaps = RowMaps{}
 	//调用go-sql-server\Mysql驱动查询
-	rows, err := p.conn.Query(sqlStr, params...)
+	stmt,err := p.conn.Prepare(sqlStr)
+	rows, err:=stmt.Query(params...)
 	if err != nil {
 		log.Println("mysql query error", err.Error())
 		return nil, err
 	}
+
 	//延时关闭Rows
 	defer rows.Close()
 	//获取记录列
@@ -224,15 +226,13 @@ func (p *dBTool)QueryRowsWithParams(sqlStr string, params OrmParams) (rowMaps Ro
 
 		for rows.Next() {
 			_ = rows.Scan(scans...)
-			each := make(map[string]interface{})
-
+			each := map[string]interface{}{}
 			for i, col := range values {
 				each[columns[i]] = string(col)
 			}
-
 			rowMaps = append(rowMaps, each)
-
 		}
+
 		return rowMaps, nil
 	}
 }
@@ -409,6 +409,7 @@ func (p *dBTool)BatchExecuteWithModel(models OrmObjList) (rowCount int64, err er
 				}
 				rowCount = rowCount + rowAffectedCount
 			}
+
 		}
 		err := tx.Commit()
 		if err == nil {
